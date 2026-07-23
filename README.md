@@ -11,7 +11,7 @@ A mesmerizing 3D particle planet animation built with vanilla JavaScript and HTM
 ### Visual Effects
 - 🌍 **3D Rotating Planet** - 4000+ particles distributed evenly on a sphere using Fibonacci spiral
 - 💍 **Orbital Rings** - Golden, shimmering ring system around the planet
-- 🛰️ **Orbiting Satellites** - Two satellites with solar panels, blinking lights, and comet trails
+- 🚀 **Space Stations** - Two detailed ISS-style space stations with rotating modules, solar panels, antennas, docking ports, and blinking status lights
 - 🌟 **Shooting Stars** - Random meteors streaking across the sky
 - 🌌 **Nebula Clouds** - Colorful, drifting cosmic clouds in the background
 - ✨ **Atmospheric Glow** - Pulsing glow effect around the planet

@@ -436,16 +436,17 @@
             }
         }
 
-        class Satellite {
+        class SpaceStation {
             constructor(orbitRadius, orbitSpeed, tiltX, tiltZ) {
                 this.orbitRadius = orbitRadius;
                 this.orbitSpeed = orbitSpeed;
                 this.tiltX = tiltX;
                 this.tiltZ = tiltZ;
                 this.z3d = 0;
-                this.size = window.innerWidth < 768 ? 6 : 10;
+                this.size = window.innerWidth < 768 ? 8 : 14;
                 this.lastX = 0;
                 this.lastY = 0;
+                this.rotation = 0;
             }
 
             update(time) {
@@ -497,6 +498,9 @@
                 this.x = planetSettings.centerX + (this.x3d * zoomedRadius);
                 this.y = planetSettings.centerY + (this.y3d * zoomedRadius);
 
+                // Self rotation
+                this.rotation = time * 0.01;
+
                 // Comet trail
                 if (this.lastX !== 0 && this.lastY !== 0) {
                     const dist = Math.sqrt((this.x - this.lastX) ** 2 + (this.y - this.lastY) ** 2);
@@ -516,46 +520,176 @@
             draw(time) {
                 const depth = (this.z3d + this.orbitRadius) / (this.orbitRadius * 2);
                 const currentSize = this.size * (0.4 + depth * 1.2) * planetSettings.zoom;
-                const opacity = 0.2 + depth * 0.8;
+                const opacity = 0.3 + depth * 0.7;
 
                 ctx.save();
                 ctx.translate(this.x, this.y);
-                ctx.rotate(-this.x3d * 0.3);
+                ctx.rotate(this.rotation);
 
                 ctx.globalAlpha = opacity;
+
+                // === MAIN CENTRAL MODULE ===
+                // Core cylinder
+                ctx.fillStyle = '#c0c0c0';
+                ctx.strokeStyle = '#888888';
                 ctx.lineWidth = 1;
-
-                // Solar panels
-                ctx.fillStyle = 'rgba(60, 150, 255, 0.8)';
-                ctx.strokeStyle = 'rgba(200, 200, 255, 0.9)';
-                ctx.fillRect(-currentSize * 2.5, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
-                ctx.strokeRect(-currentSize * 2.5, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                
                 ctx.beginPath();
-                ctx.moveTo(-currentSize * 1.6, -currentSize * 0.4);
-                ctx.lineTo(-currentSize * 1.6, currentSize * 0.4);
+                ctx.ellipse(0, 0, currentSize * 0.4, currentSize * 1.2, 0, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.stroke();
 
-                ctx.fillRect(currentSize * 0.7, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
-                ctx.strokeRect(currentSize * 0.7, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                // Core details - horizontal rings
+                ctx.strokeStyle = '#666666';
                 ctx.beginPath();
-                ctx.moveTo(currentSize * 1.6, -currentSize * 0.4);
-                ctx.lineTo(currentSize * 1.6, currentSize * 0.4);
+                ctx.ellipse(0, 0, currentSize * 0.4, currentSize * 0.4, 0, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.ellipse(0, 0, currentSize * 0.4, currentSize * 0.8, 0, 0, Math.PI * 2);
                 ctx.stroke();
 
+                // Module windows
+                const windowColor = Math.sin(time * 0.05) > 0 ? '#4fc3f7' : '#2a6f8a';
+                ctx.fillStyle = windowColor;
+                for (let i = 0; i < 3; i++) {
+                    const wy = -currentSize * 0.6 + i * currentSize * 0.6;
+                    ctx.beginPath();
+                    ctx.arc(0, wy, currentSize * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                // === SOLAR PANELS (4 large panels) ===
+                const panelWidth = currentSize * 2.5;
+                const panelHeight = currentSize * 1.2;
+
+                ctx.fillStyle = 'rgba(20, 60, 120, 0.9)';
+                ctx.strokeStyle = '#4488cc';
+
+                // Panel positions
+                const panelPositions = [
+                    { x: -currentSize * 1.2, y: -currentSize * 2.8 }, // Top Left
+                    { x: currentSize * 1.2, y: -currentSize * 2.8 },  // Top Right
+                    { x: -currentSize * 1.2, y: currentSize * 1.6 },  // Bottom Left
+                    { x: currentSize * 1.2, y: currentSize * 1.6 }    // Bottom Right
+                ];
+
+                panelPositions.forEach((pos, idx) => {
+                    // Panel background
+                    ctx.fillRect(pos.x - panelWidth/2, pos.y - panelHeight/2, panelWidth, panelHeight);
+                    ctx.strokeRect(pos.x - panelWidth/2, pos.y - panelHeight/2, panelWidth, panelHeight);
+
+                    // Panel grid lines
+                    ctx.strokeStyle = 'rgba(100, 180, 255, 0.5)';
+                    ctx.lineWidth = 0.5;
+                    
+                    // Horizontal lines
+                    for (let i = 1; i < 4; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(pos.x - panelWidth/2, pos.y - panelHeight/2 + (panelHeight/4) * i);
+                        ctx.lineTo(pos.x + panelWidth/2, pos.y - panelHeight/2 + (panelHeight/4) * i);
+                        ctx.stroke();
+                    }
+                    
+                    // Vertical lines
+                    for (let i = 1; i < 6; i++) {
+                        ctx.beginPath();
+                        ctx.moveTo(pos.x - panelWidth/2 + (panelWidth/6) * i, pos.y - panelHeight/2);
+                        ctx.lineTo(pos.x - panelWidth/2 + (panelWidth/6) * i, pos.y + panelHeight/2);
+                        ctx.stroke();
+                    }
+
+                    // Panel connector arm
+                    ctx.fillStyle = '#888888';
+                    ctx.fillRect(pos.x - currentSize * 0.1, pos.y > 0 ? currentSize * 0.8 : -currentSize * 0.8, currentSize * 0.2, currentSize * 0.8);
+                });
+
+                // === STRUCTURAL TRUSSES ===
+                ctx.strokeStyle = '#aaaaaa';
+                ctx.lineWidth = 2;
+                
+                // Horizontal truss
                 ctx.beginPath();
-                ctx.moveTo(-currentSize * 0.7, 0);
-                ctx.lineTo(currentSize * 0.7, 0);
-                ctx.strokeStyle = '#ffffff';
-                ctx.lineWidth = 1.5;
+                ctx.moveTo(-currentSize * 2.7, -currentSize * 2.2);
+                ctx.lineTo(currentSize * 2.7, -currentSize * 2.2);
+                ctx.moveTo(-currentSize * 2.7, currentSize * 0.2);
+                ctx.lineTo(currentSize * 2.7, currentSize * 0.2);
                 ctx.stroke();
 
-                ctx.fillStyle = '#e0e0e0';
-                ctx.fillRect(-currentSize * 0.6, -currentSize * 0.7, currentSize * 1.2, currentSize * 1.4);
+                // Truss diagonal supports
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#888888';
+                for (let i = 0; i < 4; i++) {
+                    const x1 = -currentSize * 2.7 + (currentSize * 0.9) * i;
+                    const x2 = x1 + currentSize * 0.45;
+                    ctx.beginPath();
+                    ctx.moveTo(x1, -currentSize * 2.2);
+                    ctx.lineTo(x2, currentSize * 0.2);
+                    ctx.moveTo(x2, -currentSize * 2.2);
+                    ctx.lineTo(x1, currentSize * 0.2);
+                    ctx.stroke();
+                }
 
-                const isBlinking = Math.sin(time * 0.15) > 0;
-                ctx.fillStyle = isBlinking ? '#ff3333' : '#550000';
+                // === ANTENNAS ===
+                ctx.strokeStyle = '#cccccc';
+                ctx.lineWidth = 1;
+                
+                // Main antenna
                 ctx.beginPath();
-                ctx.arc(0, -currentSize * 0.5, currentSize * 0.2, 0, Math.PI * 2);
+                ctx.moveTo(0, -currentSize * 1.2);
+                ctx.lineTo(0, -currentSize * 2.5);
+                ctx.stroke();
+                
+                // Antenna dish
+                ctx.beginPath();
+                ctx.arc(0, -currentSize * 2.5, currentSize * 0.3, Math.PI, 0);
+                ctx.fillStyle = 'rgba(200, 200, 200, 0.7)';
+                ctx.fill();
+                ctx.stroke();
+
+                // Side antennas
+                ctx.beginPath();
+                ctx.moveTo(-currentSize * 0.3, -currentSize * 1);
+                ctx.lineTo(-currentSize * 0.8, -currentSize * 1.8);
+                ctx.moveTo(currentSize * 0.3, -currentSize * 1);
+                ctx.lineTo(currentSize * 0.8, -currentSize * 1.8);
+                ctx.stroke();
+
+                // === DOCKING PORTS ===
+                ctx.fillStyle = '#666666';
+                ctx.strokeStyle = '#444444';
+                ctx.lineWidth = 1;
+                
+                // Front docking port
+                ctx.beginPath();
+                ctx.arc(0, -currentSize * 1.2, currentSize * 0.25, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Side docking ports
+                ctx.fillRect(-currentSize * 0.45, -currentSize * 0.3, currentSize * 0.2, currentSize * 0.6);
+                ctx.fillRect(currentSize * 0.25, -currentSize * 0.3, currentSize * 0.2, currentSize * 0.6);
+
+                // === STATUS LIGHTS ===
+                const isBlinking1 = Math.sin(time * 0.15) > 0;
+                const isBlinking2 = Math.sin(time * 0.15 + Math.PI/2) > 0;
+                
+                // Red warning light
+                ctx.fillStyle = isBlinking1 ? '#ff3333' : '#550000';
+                ctx.beginPath();
+                ctx.arc(-currentSize * 0.25, currentSize * 0.8, currentSize * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Green status light
+                ctx.fillStyle = isBlinking2 ? '#33ff33' : '#005500';
+                ctx.beginPath();
+                ctx.arc(currentSize * 0.25, currentSize * 0.8, currentSize * 0.1, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Blue operational light
+                ctx.fillStyle = '#4fc3f7';
+                ctx.beginPath();
+                ctx.arc(0, currentSize * 0.8, currentSize * 0.08, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.restore();
@@ -629,9 +763,9 @@
                 shootingStarsArray.push(star);
             }
 
-            // Generate Satellites
-            particlesArray.push(new Satellite(2.6, 0.015, 0.4, 0.2));
-            particlesArray.push(new Satellite(3.2, 0.01, -0.3, 0.5));
+            // Generate Space Stations
+            particlesArray.push(new SpaceStation(2.6, 0.015, 0.4, 0.2));
+            particlesArray.push(new SpaceStation(3.2, 0.01, -0.3, 0.5));
         }
 
         // Draw atmospheric glow around planet
