@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planet Particle Animation</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050510;
+            font-family: 'Inter', sans-serif;
+        }
+
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #050510 100%);
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #controls-hint {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 12px;
+            z-index: 100;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <canvas id="particleCanvas"></canvas>
+    </div>
+    <div id="controls-hint">Arrow Keys: Rotate | Scroll: Zoom | Click: Explosion</div>
+
+    <script>
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particlesArray;
+        let starsArray;
+        let shootingStarsArray = [];
+        let cometTrailsArray = [];
+        let explosionParticles = [];
+        let nebulaClouds = [];
+        let trailCanvas, trailCtx;
+
+        // Planet properties
+        const planetSettings = {
+            radius: Math.min(canvas.width, canvas.height) * 0.25,
+            centerX: canvas.width / 2,
+            centerY: canvas.height / 2,
+            rotationSpeed: 0.005,
+            zoom: 1,
+            manualRotationX: 0,
+            manualRotationY: 0
+        };
+
+        // Color shifting phase
+        let colorShiftPhase = 0;
+
+        // Mouse tracking
+        let mouse = {
+            x: null,
+            y: null,
+            radius: 100
+        };
+
+        window.addEventListener('mousemove', function(event) {
+            mouse.x = event.x;
+            mouse.y = event.y;
+        });
+
+        window.addEventListener('touchmove', function(event) {
+            mouse.x = event.touches[0].clientX;
+            mouse.y = event.touches[0].clientY;
+        });
+
+        window.addEventListener('mouseout', function() {
+            mouse.x = undefined;
+            mouse.y = undefined;
+        });
+
+        // Click to explode
+        canvas.addEventListener('click', function(event) {
+            createExplosion(event.clientX, event.clientY);
+        });
+
+        // Keyboard controls for rotation
+        const keys = {};
+        window.addEventListener('keydown', function(e) {
+            keys[e.key] = true;
+        });
+        window.addEventListener('keyup', function(e) {
+            keys[e.key] = false;
+        });
+
+        // Zoom with scroll
+        window.addEventListener('wheel', function(e) {
+            planetSettings.zoom += e.deltaY * -0.001;
+            planetSettings.zoom = Math.max(0.5, Math.min(3, planetSettings.zoom));
+        });
+
+        // Shooting Star class
+        class ShootingStar {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height * 0.5;
+                this.length = Math.random() * 80 + 40;
+                this.speed = Math.random() * 8 + 4;
+                this.angle = Math.PI / 4 + (Math.random() - 0.5) * 0.3;
+                this.opacity = 1;
+                this.active = true;
+            }
+
+            update() {
+                if (!this.active) return;
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+                this.opacity -= 0.015;
+
+                if (this.opacity <= 0 || this.x > canvas.width || this.y > canvas.height) {
+                    this.active = false;
+                }
+            }
+
+            draw() {
+                if (!this.active) return;
+                const tailX = this.x - Math.cos(this.angle) * this.length;
+                const tailY = this.y - Math.sin(this.angle) * this.length;
+
+                const gradient = ctx.createLinearGradient(tailX, tailY, this.x, this.y);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+                gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.5)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, ' + this.opacity + ')');
+
+                ctx.beginPath();
+                ctx.moveTo(tailX, tailY);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = gradient;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Head glow
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255, 255, 255, ' + this.opacity + ')';
+                ctx.fill();
+            }
+        }
+
+        // Nebula Cloud class
+        class NebulaCloud {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.radius = Math.random() * 200 + 100;
+                this.color = this.getRandomNebulaColor();
+                this.alpha = Math.random() * 0.1 + 0.03;
+                this.drift = Math.random() * 0.2 - 0.1;
+            }
+
+            getRandomNebulaColor() {
+                const colors = [
+                    'rgba(100, 50, 150, ',  // Purple
+                    'rgba(50, 100, 150, ',   // Blue
+                    'rgba(150, 50, 100, ',   // Pink
+                    'rgba(50, 150, 100, ',   // Teal
+                    'rgba(150, 100, 50, '    // Orange
+                ];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.x += this.drift;
+                if (this.x < -this.radius) this.x = canvas.width + this.radius;
+                if (this.x > canvas.width + this.radius) this.x = -this.radius;
+            }
+
+            draw() {
+                const gradient = ctx.createRadialGradient(
+                    this.x, this.y, 0,
+                    this.x, this.y, this.radius
+                );
+                gradient.addColorStop(0, this.color + this.alpha + ')');
+                gradient.addColorStop(1, this.color + '0)');
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            }
+        }
+
+        // Star class
+        class Star {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5;
+                this.alpha = Math.random();
+                this.alphaChange = (Math.random() * 0.02) - 0.01;
+            }
+
+            update() {
+                this.alpha += this.alphaChange;
+                if (this.alpha <= 0.1 || this.alpha >= 0.9) {
+                    this.alphaChange = -this.alphaChange;
+                }
+                this.draw();
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fill();
+            }
+        }
+
+        // Explosion Particle class
+        class ExplosionParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 8 + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.size = Math.random() * 4 + 2;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.01;
+                this.color = this.getRandomColor();
+            }
+
+            getRandomColor() {
+                const colors = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff85a1'];
+                return colors[Math.floor(Math.random() * colors.length)];
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.98;
+                this.vy *= 0.98;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                if (this.life <= 0) return;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = this.life;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function createExplosion(x, y) {
+            for (let i = 0; i < 50; i++) {
+                explosionParticles.push(new ExplosionParticle(x, y));
+            }
+        }
+
+        // Comet Trail class
+        class CometTrail {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.life = 1;
+                this.decay = 0.05;
+                this.size = Math.random() * 2 + 1;
+            }
+
+            update() {
+                this.life -= this.decay;
+            }
+
+            draw() {
+                if (this.life <= 0) return;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(100, 180, 255, ${this.life * 0.5})`;
+                ctx.fill();
+            }
+        }
+
+        class Particle {
+            constructor(baseX, baseY, baseZ, size, color, isRing = false) {
+                this.baseX = baseX;
+                this.baseY = baseY;
+                this.baseZ = baseZ;
+                this.originalSize = size;
+                this.size = size;
+                this.color = color;
+                this.originalColor = color;
+                this.isRing = isRing;
+                this.x3d = this.baseX;
+                this.y3d = this.baseY;
+                this.z3d = this.baseZ;
+                this.x = 0;
+                this.y = 0;
+                this.vx = 0;
+                this.vy = 0;
+                this.displacedX = 0;
+                this.displacedY = 0;
+                this.density = (Math.random() * 20) + 1;
+            }
+
+            shiftColor(time) {
+                // Dynamic color shifting
+                const shift = Math.sin(time * 0.001 + colorShiftPhase) * 30;
+                const r = Math.min(255, Math.max(0, parseInt(this.originalColor.slice(1, 3), 16) + shift));
+                const g = Math.min(255, Math.max(0, parseInt(this.originalColor.slice(3, 5), 16) + shift * 0.5));
+                const b = Math.min(255, Math.max(0, parseInt(this.originalColor.slice(5, 7), 16) + shift * 0.3));
+                return '#' + r.toString(16).padStart(2, '0') + g.toString(16).padStart(2, '0') + b.toString(16).padStart(2, '0');
+            }
+
+            draw(time) {
+                const s = Math.sin(time * planetSettings.rotationSpeed);
+                const c = Math.cos(time * planetSettings.rotationSpeed);
+
+                // Apply manual rotation
+                const manualS = Math.sin(planetSettings.manualRotationY);
+                const manualC = Math.cos(planetSettings.manualRotationY);
+                const manualSX = Math.sin(planetSettings.manualRotationX);
+                const manualCX = Math.cos(planetSettings.manualRotationX);
+
+                let x = this.baseX * c - this.baseZ * s;
+                let z = this.baseZ * c + this.baseX * s;
+                let y = this.baseY;
+
+                // Manual Y rotation
+                let tempX = x * manualC - z * manualS;
+                let tempZ = z * manualC + x * manualS;
+                x = tempX;
+                z = tempZ;
+
+                // Manual X rotation
+                let tempY = y * manualCX - z * manualSX;
+                tempZ = z * manualCX + y * manualSX;
+                y = tempY;
+                z = tempZ;
+
+                // Apply tilt
+                const tiltAngle = 0.5;
+                const st = Math.sin(tiltAngle);
+                const ct = Math.cos(tiltAngle);
+                const tempY2 = y * ct - z * st;
+                const tempZ2 = z * ct + y * st;
+                y = tempY2;
+                z = tempZ2;
+
+                this.x3d = x;
+                this.y3d = y;
+                this.z3d = z;
+
+                // Apply zoom
+                const zoomedRadius = planetSettings.radius * planetSettings.zoom;
+                let targetX = planetSettings.centerX + (this.x3d * zoomedRadius);
+                let targetY = planetSettings.centerY + (this.y3d * zoomedRadius);
+
+                this.x = targetX + this.displacedX;
+                this.y = targetY + this.displacedY;
+
+                const depth = (this.z3d + 1) / 2;
+
+                // Ring pulsing effect
+                let pulseMultiplier = 1;
+                if (this.isRing) {
+                    pulseMultiplier = 1 + Math.sin(time * 0.003) * 0.15;
+                }
+
+                const currentSize = this.size * (0.5 + depth * 0.8) * pulseMultiplier;
+                const opacity = 0.1 + depth * 0.9;
+
+                // Dynamic color
+                this.color = this.shiftColor(time);
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, currentSize, 0, Math.PI * 2, false);
+
+                const r = parseInt(this.color.slice(1, 3), 16);
+                const g = parseInt(this.color.slice(3, 5), 16);
+                const b = parseInt(this.color.slice(5, 7), 16);
+
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                ctx.fill();
+            }
+
+            update(time) {
+                if (mouse.x != null && mouse.y != null) {
+                    let dx = mouse.x - this.x;
+                    let dy = mouse.y - this.y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < mouse.radius) {
+                        let forceDirectionX = dx / distance;
+                        let forceDirectionY = dy / distance;
+                        let force = (mouse.radius - distance) / mouse.radius;
+
+                        this.vx -= forceDirectionX * force * 2;
+                        this.vy -= forceDirectionY * force * 2;
+                    }
+                }
+
+                this.displacedX += this.vx;
+                this.displacedY += this.vy;
+                this.vx *= 0.9;
+                this.vy *= 0.9;
+                this.displacedX -= this.displacedX * 0.05;
+                this.displacedY -= this.displacedY * 0.05;
+
+                this.draw(time);
+            }
+        }
+
+        class Satellite {
+            constructor(orbitRadius, orbitSpeed, tiltX, tiltZ) {
+                this.orbitRadius = orbitRadius;
+                this.orbitSpeed = orbitSpeed;
+                this.tiltX = tiltX;
+                this.tiltZ = tiltZ;
+                this.z3d = 0;
+                this.size = window.innerWidth < 768 ? 6 : 10;
+                this.lastX = 0;
+                this.lastY = 0;
+            }
+
+            update(time) {
+                let angle = time * this.orbitSpeed;
+                let x = Math.cos(angle) * this.orbitRadius;
+                let y = 0;
+                let z = Math.sin(angle) * this.orbitRadius;
+
+                let tempY = y * Math.cos(this.tiltX) - z * Math.sin(this.tiltX);
+                let tempZ = z * Math.cos(this.tiltX) + y * Math.sin(this.tiltX);
+                y = tempY;
+                z = tempZ;
+
+                let tempX = x * Math.cos(this.tiltZ) - y * Math.sin(this.tiltZ);
+                tempY = y * Math.cos(this.tiltZ) + x * Math.sin(this.tiltZ);
+                x = tempX;
+                y = tempY;
+
+                // Apply manual rotation
+                const manualS = Math.sin(planetSettings.manualRotationY);
+                const manualC = Math.cos(planetSettings.manualRotationY);
+                const manualSX = Math.sin(planetSettings.manualRotationX);
+                const manualCX = Math.cos(planetSettings.manualRotationX);
+
+                tempX = x * manualC - z * manualS;
+                tempZ = z * manualC + x * manualS;
+                x = tempX;
+                z = tempZ;
+
+                tempY = y * manualCX - z * manualSX;
+                tempZ = z * manualCX + y * manualSX;
+                y = tempY;
+                z = tempZ;
+
+                // Apply tilt
+                const tiltAngle = 0.5;
+                const st = Math.sin(tiltAngle);
+                const ct = Math.cos(tiltAngle);
+                tempY = y * ct - z * st;
+                tempZ = z * ct + y * st;
+                y = tempY;
+                z = tempZ;
+
+                this.x3d = x;
+                this.y3d = y;
+                this.z3d = z;
+
+                const zoomedRadius = planetSettings.radius * planetSettings.zoom;
+                this.x = planetSettings.centerX + (this.x3d * zoomedRadius);
+                this.y = planetSettings.centerY + (this.y3d * zoomedRadius);
+
+                // Comet trail
+                if (this.lastX !== 0 && this.lastY !== 0) {
+                    const dist = Math.sqrt((this.x - this.lastX) ** 2 + (this.y - this.lastY) ** 2);
+                    if (dist > 5) {
+                        cometTrailsArray.push(new CometTrail(this.x, this.y));
+                        if (cometTrailsArray.length > 200) {
+                            cometTrailsArray.shift();
+                        }
+                    }
+                }
+                this.lastX = this.x;
+                this.lastY = this.y;
+
+                this.draw(time);
+            }
+
+            draw(time) {
+                const depth = (this.z3d + this.orbitRadius) / (this.orbitRadius * 2);
+                const currentSize = this.size * (0.4 + depth * 1.2) * planetSettings.zoom;
+                const opacity = 0.2 + depth * 0.8;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(-this.x3d * 0.3);
+
+                ctx.globalAlpha = opacity;
+                ctx.lineWidth = 1;
+
+                // Solar panels
+                ctx.fillStyle = 'rgba(60, 150, 255, 0.8)';
+                ctx.strokeStyle = 'rgba(200, 200, 255, 0.9)';
+                ctx.fillRect(-currentSize * 2.5, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                ctx.strokeRect(-currentSize * 2.5, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                ctx.beginPath();
+                ctx.moveTo(-currentSize * 1.6, -currentSize * 0.4);
+                ctx.lineTo(-currentSize * 1.6, currentSize * 0.4);
+                ctx.stroke();
+
+                ctx.fillRect(currentSize * 0.7, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                ctx.strokeRect(currentSize * 0.7, -currentSize * 0.4, currentSize * 1.8, currentSize * 0.8);
+                ctx.beginPath();
+                ctx.moveTo(currentSize * 1.6, -currentSize * 0.4);
+                ctx.lineTo(currentSize * 1.6, currentSize * 0.4);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(-currentSize * 0.7, 0);
+                ctx.lineTo(currentSize * 0.7, 0);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                ctx.fillStyle = '#e0e0e0';
+                ctx.fillRect(-currentSize * 0.6, -currentSize * 0.7, currentSize * 1.2, currentSize * 1.4);
+
+                const isBlinking = Math.sin(time * 0.15) > 0;
+                ctx.fillStyle = isBlinking ? '#ff3333' : '#550000';
+                ctx.beginPath();
+                ctx.arc(0, -currentSize * 0.5, currentSize * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        function init() {
+            particlesArray = [];
+            starsArray = [];
+            shootingStarsArray = [];
+            cometTrailsArray = [];
+            explosionParticles = [];
+            nebulaClouds = [];
+
+            const isMobile = window.innerWidth < 768;
+            let numberOfPlanetParticles = isMobile ? 1500 : 4000;
+            let numberOfRingParticles = isMobile ? 1200 : 3000;
+
+            const goldenRatio = (1 + Math.sqrt(5)) / 2;
+
+            // Planet colors
+            const planetColors = ['#4fc3f7', '#00b0ff', '#81d4fa', '#b2ebf2', '#ffffff'];
+            const ringColors = ['#ffd54f', '#ffca28', '#ffe082', '#b2ebf2', '#ffffff'];
+
+            // Generate Planet Particles
+            for (let i = 0; i < numberOfPlanetParticles; i++) {
+                let t = i / numberOfPlanetParticles;
+                let phi = Math.acos(1 - 2 * t);
+                let theta = 2 * Math.PI * i / goldenRatio;
+
+                let baseX = Math.sin(phi) * Math.cos(theta);
+                let baseY = Math.cos(phi);
+                let baseZ = Math.sin(phi) * Math.sin(theta);
+
+                let size = (Math.random() * 1.0) + 0.2;
+                let color = planetColors[Math.floor(Math.random() * planetColors.length)];
+
+                particlesArray.push(new Particle(baseX, baseY, baseZ, size, color, false));
+            }
+
+            // Generate Ring Particles
+            for (let i = 0; i < numberOfRingParticles; i++) {
+                let angle = Math.random() * Math.PI * 2;
+                let distance = 1.3 + (Math.random() * 0.9);
+
+                let baseX = Math.cos(angle) * distance;
+                let baseY = (Math.random() - 0.5) * 0.1;
+                let baseZ = Math.sin(angle) * distance;
+
+                let size = (Math.random() * 0.8) + 0.2;
+                let color = ringColors[Math.floor(Math.random() * ringColors.length)];
+
+                particlesArray.push(new Particle(baseX, baseY, baseZ, size, color, true));
+            }
+
+            // Generate Stars
+            const numberOfStars = isMobile ? 150 : 350;
+            for (let i = 0; i < numberOfStars; i++) {
+                starsArray.push(new Star());
+            }
+
+            // Generate Nebulas
+            for (let i = 0; i < 5; i++) {
+                nebulaClouds.push(new NebulaCloud());
+            }
+
+            // Generate Shooting Stars
+            for (let i = 0; i < 3; i++) {
+                const star = new ShootingStar();
+                star.active = false;
+                shootingStarsArray.push(star);
+            }
+
+            // Generate Satellites
+            particlesArray.push(new Satellite(2.6, 0.015, 0.4, 0.2));
+            particlesArray.push(new Satellite(3.2, 0.01, -0.3, 0.5));
+        }
+
+        // Draw atmospheric glow around planet
+        function drawAtmosphereGlow(time) {
+            const gradient = ctx.createRadialGradient(
+                planetSettings.centerX, planetSettings.centerY,
+                planetSettings.radius * 0.8 * planetSettings.zoom,
+                planetSettings.centerX, planetSettings.centerY,
+                planetSettings.radius * 1.5 * planetSettings.zoom
+            );
+            
+            const pulse = Math.sin(time * 0.002) * 0.1 + 0.2;
+            gradient.addColorStop(0, `rgba(100, 200, 255, ${pulse})`);
+            gradient.addColorStop(0.5, `rgba(100, 150, 255, ${pulse * 0.5})`);
+            gradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
+
+            ctx.beginPath();
+            ctx.arc(
+                planetSettings.centerX, planetSettings.centerY,
+                planetSettings.radius * 1.5 * planetSettings.zoom,
+                0, Math.PI * 2
+            );
+            ctx.fillStyle = gradient;
+            ctx.fill();
+        }
+
+        function drawSkyBody(time) {
+            const date = new Date();
+            const hour = date.getHours();
+            const minute = date.getMinutes();
+            const second = date.getSeconds();
+
+            const currentDecimalTime = hour + (minute / 60) + (second / 3600);
+            const isDay = hour >= 6 && hour < 18;
+
+            let progress = 0;
+            if (isDay) {
+                progress = (currentDecimalTime - 6) / 12;
+            } else {
+                let nightHour = currentDecimalTime >= 18 ? currentDecimalTime - 18 : currentDecimalTime + 6;
+                progress = nightHour / 12;
+            }
+
+            const radiusX = canvas.width * 0.45;
+            const radiusY = canvas.height * 0.40;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height * 0.85;
+
+            const angle = Math.PI * (1 - progress);
+
+            const x = centerX + radiusX * Math.cos(angle);
+            const y = centerY - radiusY * Math.sin(angle);
+            const radius = Math.min(canvas.width, canvas.height) * 0.08;
+
+            ctx.save();
+            if (isDay) {
+                // Sun with rays
+                const rayCount = 12;
+                const rayLength = radius * 1.5;
+                
+                // Animated rays
+                for (let i = 0; i < rayCount; i++) {
+                    const rayAngle = (i / rayCount) * Math.PI * 2 + time * 0.0005;
+                    const rayWidth = 0.05;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(
+                        x + Math.cos(rayAngle - rayWidth) * radius * 2.5,
+                        y + Math.sin(rayAngle - rayWidth) * radius * 2.5
+                    );
+                    ctx.lineTo(
+                        x + Math.cos(rayAngle + rayWidth) * radius * 2.5,
+                        y + Math.sin(rayAngle + rayWidth) * radius * 2.5
+                    );
+                    ctx.closePath();
+                    
+                    const rayGradient = ctx.createRadialGradient(x, y, radius, x, y, radius * 2.5);
+                    rayGradient.addColorStop(0, 'rgba(255, 200, 50, 0.3)');
+                    rayGradient.addColorStop(1, 'rgba(255, 150, 0, 0)');
+                    ctx.fillStyle = rayGradient;
+                    ctx.fill();
+                }
+
+                let gradient = ctx.createRadialGradient(x, y, radius * 0.1, x, y, radius * 2.5);
+                gradient.addColorStop(0, '#ffffff');
+                gradient.addColorStop(0.15, '#ffea00');
+                gradient.addColorStop(0.4, 'rgba(255, 100, 0, 0.4)');
+                gradient.addColorStop(1, 'rgba(255, 100, 0, 0)');
+
+                ctx.beginPath();
+                ctx.arc(x, y, radius * 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            } else {
+                // Moon with craters
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#f0f0f5';
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+                ctx.fill();
+
+                // Craters
+                ctx.shadowBlur = 0;
+                const craters = [
+                    { x: -0.3, y: -0.2, r: 0.2 },
+                    { x: 0.2, y: 0.3, r: 0.15 },
+                    { x: 0.1, y: -0.4, r: 0.1 },
+                    { x: -0.4, y: 0.1, r: 0.12 }
+                ];
+
+                craters.forEach(crater => {
+                    ctx.beginPath();
+                    ctx.arc(x + crater.x * radius, y + crater.y * radius, crater.r * radius, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(180, 180, 190, 0.5)';
+                    ctx.fill();
+                });
+
+                // Shadow part
+                ctx.beginPath();
+                ctx.arc(x + radius * 0.35, y - radius * 0.25, radius * 0.95, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(5, 5, 16, 1)';
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function connect() {
+            let opacityValue = 1;
+            const connectionDistance = planetSettings.radius * 0.25 * planetSettings.zoom;
+
+            for (let a = 0; a < particlesArray.length; a++) {
+                if (particlesArray[a].z3d < -0.2) continue;
+
+                for (let b = a + 1; b < particlesArray.length; b++) {
+                    if (particlesArray[b].z3d < -0.2) continue;
+
+                    let dx = particlesArray[a].x - particlesArray[b].x;
+                    let dy = particlesArray[a].y - particlesArray[b].y;
+                    let distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < connectionDistance) {
+                        opacityValue = 1 - (distance / connectionDistance);
+                        let depthFade = Math.min((particlesArray[a].z3d + 1) / 2, (particlesArray[b].z3d + 1) / 2);
+                        let finalOpacity = opacityValue * depthFade * 0.3;
+
+                        if (finalOpacity > 0.05) {
+                            ctx.strokeStyle = `rgba(100, 200, 255, ${finalOpacity})`;
+                            ctx.lineWidth = 0.5;
+                            ctx.beginPath();
+                            ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                            ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+        }
+
+        let time = 0;
+        let shootingStarTimer = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Clear with trail effect
+            ctx.fillStyle = 'rgba(5, 5, 16, 1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            time += 1;
+            colorShiftPhase += 0.001;
+
+            // Handle keyboard rotation
+            if (keys['ArrowLeft']) planetSettings.manualRotationY += 0.02;
+            if (keys['ArrowRight']) planetSettings.manualRotationY -= 0.02;
+            if (keys['ArrowUp']) planetSettings.manualRotationX -= 0.02;
+            if (keys['ArrowDown']) planetSettings.manualRotationX += 0.02;
+
+            // Render nebulas
+            for (let i = 0; i < nebulaClouds.length; i++) {
+                nebulaClouds[i].update();
+                nebulaClouds[i].draw();
+            }
+
+            // Render stars
+            for (let i = 0; i < starsArray.length; i++) {
+                starsArray[i].update();
+            }
+
+            // Update and render shooting stars
+            shootingStarTimer++;
+            if (shootingStarTimer > 300 && shootingStarsArray.some(s => !s.active)) {
+                const inactiveStar = shootingStarsArray.find(s => !s.active);
+                if (inactiveStar) {
+                    inactiveStar.reset();
+                    shootingStarTimer = 0;
+                }
+            }
+            for (let i = 0; i < shootingStarsArray.length; i++) {
+                shootingStarsArray[i].update();
+                shootingStarsArray[i].draw();
+            }
+
+            // Draw sky body
+            drawSkyBody(time);
+
+            // Draw atmosphere glow
+            drawAtmosphereGlow(time);
+
+            // Sort and render particles
+            particlesArray.sort((a, b) => a.z3d - b.z3d);
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update(time);
+            }
+
+            // Render comet trails
+            for (let i = cometTrailsArray.length - 1; i >= 0; i--) {
+                cometTrailsArray[i].update();
+                cometTrailsArray[i].draw();
+                if (cometTrailsArray[i].life <= 0) {
+                    cometTrailsArray.splice(i, 1);
+                }
+            }
+
+            // Update and render explosions
+            for (let i = explosionParticles.length - 1; i >= 0; i--) {
+                explosionParticles[i].update();
+                explosionParticles[i].draw();
+                if (explosionParticles[i].life <= 0) {
+                    explosionParticles.splice(i, 1);
+                }
+            }
+
+            // connect(); // Uncomment for wireframe effect
+        }
+
+        window.addEventListener('resize', function() {
+            canvas.width = innerWidth;
+            canvas.height = innerHeight;
+            planetSettings.centerX = canvas.width / 2;
+            planetSettings.centerY = canvas.height / 2;
+            planetSettings.radius = Math.min(canvas.width, canvas.height) * 0.25;
+            init();
+        });
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
