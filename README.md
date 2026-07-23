@@ -1,6 +1,6 @@
 # 🌌 Planet Particle Animation
 
-A mesmerizing 3D particle planet animation built with vanilla JavaScript and HTML5 Canvas. Watch a stunning cosmic scene with a rotating planet, orbital rings, satellites, shooting stars, nebula clouds, and more!
+A mesmerizing 3D particle planet animation built with vanilla JavaScript and HTML5 Canvas. Watch a stunning cosmic scene with a rotating planet, orbital rings, space stations, black hole, shooting stars, nebula clouds, asteroids, lightning, and more!
 
 ![Planet Animation Preview](https://img.shields.io/badge/Status-Active-brightgreen)
 ![HTML5](https://img.shields.io/badge/HTML5-Canvas-orange)
@@ -8,30 +8,50 @@ A mesmerizing 3D particle planet animation built with vanilla JavaScript and HTM
 
 ## ✨ Features
 
-### Visual Effects
+### Celestial Objects
 - 🌍 **3D Rotating Planet** - 4000+ particles distributed evenly on a sphere using Fibonacci spiral
 - 💍 **Orbital Rings** - Golden, shimmering ring system around the planet
 - 🚀 **Space Stations** - Two detailed ISS-style space stations with rotating modules, solar panels, antennas, docking ports, and blinking status lights
+- 🪐 **Second Planet** - Gas giant with animated stripes and storm spots orbiting in the background
+- 🕳️ **Black Hole** - Interactive black hole with gravitational lensing, accretion disk, and event horizon glow
+
+### Atmospheric & Weather Effects
+- ⚡ **Lightning** - Random lightning bolts striking the dark side of the planet
 - 🌟 **Shooting Stars** - Random meteors streaking across the sky
 - 🌌 **Nebula Clouds** - Colorful, drifting cosmic clouds in the background
 - ✨ **Atmospheric Glow** - Pulsing glow effect around the planet
 - 🌈 **Dynamic Color Shifting** - Particles subtly change colors over time
 - 🌙 **Realistic Sun/Moon** - Sun with animated rays, moon with craters (time-based)
+- 💫 **Dust Particles** - Floating space dust with twinkling effect
+
+### Space Debris
+- ☄️ **Asteroid Belt** - 80 irregular asteroids orbiting the planet with rotation
 
 ### Interactive Features
 - 🖱️ **Click to Explode** - Click anywhere to create colorful particle explosions
+- 🖐️ **Drag to Rotate** - Click and drag to manually rotate the view
 - 🔍 **Zoom** - Scroll up/down to zoom in/out (0.5x to 3x)
 - ⌨️ **Keyboard Controls** - Arrow keys to manually rotate the view
 - 🖐️ **Mouse Repulsion** - Move mouse near particles to see them react
+- ⚙️ **Control Panel** - Toggle effects, adjust speed, and particle density
 
 ## 🎮 Controls
 
 | Input | Action |
 |-------|--------|
 | **Click** | Create particle explosion |
+| **Drag** | Rotate planet view |
 | **Scroll** | Zoom in/out |
 | **Arrow Keys** | Rotate view |
-| **Mouse Move** | Repel nearby particles |
+| **Control Panel** | Toggle effects, adjust settings |
+
+### Control Panel Options
+- **Rotation Speed**: Adjust planet rotation speed
+- **Particle Density**: Change particle count (50%-150%)
+- **Black Hole**: Toggle black hole effect
+- **Asteroid Belt**: Toggle asteroid belt
+- **Lightning**: Toggle lightning effect
+- **Second Planet**: Toggle second gas giant
 
 ## 🚀 Getting Started
 

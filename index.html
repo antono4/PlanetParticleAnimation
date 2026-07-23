@@ -37,6 +37,66 @@
             font-size: 12px;
             z-index: 100;
             pointer-events: none;
+            line-height: 1.6;
+        }
+
+        #control-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 100;
+            min-width: 200px;
+        }
+
+        #control-panel h3 {
+            margin: 0 0 12px 0;
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .control-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+        }
+
+        .control-row:last-child {
+            margin-bottom: 0;
+        }
+
+        input[type="range"] {
+            width: 100px;
+            cursor: pointer;
+        }
+
+        .toggle-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .toggle-btn.active {
+            background: rgba(100, 200, 255, 0.3);
+            border-color: rgba(100, 200, 255, 0.5);
+            color: #4fc3f7;
         }
     </style>
 </head>
@@ -44,7 +104,38 @@
     <div id="canvas-container">
         <canvas id="particleCanvas"></canvas>
     </div>
-    <div id="controls-hint">Arrow Keys: Rotate | Scroll: Zoom | Click: Explosion</div>
+    <div id="controls-hint">
+        🖱️ Drag: Rotate | Scroll: Zoom<br>
+        ⚡ Click: Explosion | ⚙️ Panel: Settings
+    </div>
+
+    <div id="control-panel">
+        <h3>⚙️ Controls</h3>
+        <div class="control-row">
+            <span>Rotation Speed</span>
+            <input type="range" id="speedSlider" min="0" max="100" value="30">
+        </div>
+        <div class="control-row">
+            <span>Particle Density</span>
+            <input type="range" id="densitySlider" min="50" max="150" value="100">
+        </div>
+        <div class="control-row">
+            <span>Black Hole</span>
+            <button class="toggle-btn active" id="toggleBlackHole">ON</button>
+        </div>
+        <div class="control-row">
+            <span>Asteroid Belt</span>
+            <button class="toggle-btn active" id="toggleAsteroids">ON</button>
+        </div>
+        <div class="control-row">
+            <span>Lightning</span>
+            <button class="toggle-btn active" id="toggleLightning">ON</button>
+        </div>
+        <div class="control-row">
+            <span>Second Planet</span>
+            <button class="toggle-btn active" id="togglePlanet2">ON</button>
+        </div>
+    </div>
 
     <script>
         const canvas = document.getElementById('particleCanvas');
@@ -59,7 +150,19 @@
         let cometTrailsArray = [];
         let explosionParticles = [];
         let nebulaClouds = [];
-        let trailCanvas, trailCtx;
+        let dustParticles = [];
+        let asteroidBeltArray = [];
+        let lightningBolts = [];
+
+        // Toggle states
+        let settings = {
+            blackHole: true,
+            asteroids: true,
+            lightning: true,
+            secondPlanet: true,
+            rotationSpeed: 0.005,
+            density: 100
+        };
 
         // Planet properties
         const planetSettings = {
@@ -79,27 +182,53 @@
         let mouse = {
             x: null,
             y: null,
-            radius: 100
+            radius: 100,
+            isDragging: false,
+            lastX: 0,
+            lastY: 0
         };
 
         window.addEventListener('mousemove', function(event) {
+            if (mouse.isDragging) {
+                const deltaX = event.clientX - mouse.lastX;
+                const deltaY = event.clientY - mouse.lastY;
+                planetSettings.manualRotationY += deltaX * 0.005;
+                planetSettings.manualRotationX += deltaY * 0.005;
+                mouse.lastX = event.clientX;
+                mouse.lastY = event.clientY;
+            }
             mouse.x = event.x;
             mouse.y = event.y;
         });
 
-        window.addEventListener('touchmove', function(event) {
-            mouse.x = event.touches[0].clientX;
-            mouse.y = event.touches[0].clientY;
+        window.addEventListener('mousedown', function(event) {
+            mouse.isDragging = true;
+            mouse.lastX = event.clientX;
+            mouse.lastY = event.clientY;
         });
 
-        window.addEventListener('mouseout', function() {
+        window.addEventListener('mouseup', function() {
+            mouse.isDragging = false;
+        });
+
+        window.addEventListener('mouseleave', function() {
+            mouse.isDragging = false;
             mouse.x = undefined;
             mouse.y = undefined;
         });
 
+        window.addEventListener('touchmove', function(event) {
+            if (event.touches.length === 1) {
+                mouse.x = event.touches[0].clientX;
+                mouse.y = event.touches[0].clientY;
+            }
+        });
+
         // Click to explode
         canvas.addEventListener('click', function(event) {
-            createExplosion(event.clientX, event.clientY);
+            if (!mouse.isDragging) {
+                createExplosion(event.clientX, event.clientY);
+            }
         });
 
         // Keyboard controls for rotation
@@ -115,6 +244,42 @@
         window.addEventListener('wheel', function(e) {
             planetSettings.zoom += e.deltaY * -0.001;
             planetSettings.zoom = Math.max(0.5, Math.min(3, planetSettings.zoom));
+        });
+
+        // Control panel event listeners
+        document.getElementById('speedSlider').addEventListener('input', function(e) {
+            settings.rotationSpeed = e.target.value / 6000;
+            planetSettings.rotationSpeed = settings.rotationSpeed;
+        });
+
+        document.getElementById('densitySlider').addEventListener('input', function(e) {
+            settings.density = e.target.value;
+            init();
+        });
+
+        document.getElementById('toggleBlackHole').addEventListener('click', function(e) {
+            settings.blackHole = !settings.blackHole;
+            e.target.textContent = settings.blackHole ? 'ON' : 'OFF';
+            e.target.classList.toggle('active');
+        });
+
+        document.getElementById('toggleAsteroids').addEventListener('click', function(e) {
+            settings.asteroids = !settings.asteroids;
+            e.target.textContent = settings.asteroids ? 'ON' : 'OFF';
+            e.target.classList.toggle('active');
+            if (settings.asteroids) initAsteroids();
+        });
+
+        document.getElementById('toggleLightning').addEventListener('click', function(e) {
+            settings.lightning = !settings.lightning;
+            e.target.textContent = settings.lightning ? 'ON' : 'OFF';
+            e.target.classList.toggle('active');
+        });
+
+        document.getElementById('togglePlanet2').addEventListener('click', function(e) {
+            settings.secondPlanet = !settings.secondPlanet;
+            e.target.textContent = settings.secondPlanet ? 'ON' : 'OFF';
+            e.target.classList.toggle('active');
         });
 
         // Shooting Star class
@@ -282,6 +447,308 @@
                 explosionParticles.push(new ExplosionParticle(x, y));
             }
         }
+
+        // Black Hole class
+        class BlackHole {
+            constructor() {
+                this.x = canvas.width * 0.9;
+                this.y = canvas.height * 0.15;
+                this.radius = Math.min(canvas.width, canvas.height) * 0.08;
+                this.rotation = 0;
+                this.accretionDiskPhase = 0;
+            }
+
+            update(time) {
+                this.rotation += 0.02;
+                this.accretionDiskPhase += 0.03;
+            }
+
+            draw(time) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Gravitational lensing effect
+                const lensGradient = ctx.createRadialGradient(0, 0, this.radius * 0.5, 0, 0, this.radius * 3);
+                lensGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                lensGradient.addColorStop(0.3, 'rgba(50, 20, 80, 0.2)');
+                lensGradient.addColorStop(0.6, 'rgba(100, 50, 150, 0.1)');
+                lensGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 3, 0, Math.PI * 2);
+                ctx.fillStyle = lensGradient;
+                ctx.fill();
+
+                // Accretion disk
+                for (let i = 0; i < 3; i++) {
+                    const diskRadius = this.radius * (1.5 + i * 0.4);
+                    const diskGradient = ctx.createRadialGradient(0, 0, diskRadius * 0.5, 0, 0, diskRadius);
+                    
+                    const hue = (time * 0.5 + i * 30) % 360;
+                    diskGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0)`);
+                    diskGradient.addColorStop(0.5, `hsla(${hue}, 100%, 60%, ${0.3 - i * 0.1})`);
+                    diskGradient.addColorStop(1, `hsla(${hue}, 100%, 30%, 0)`);
+
+                    ctx.beginPath();
+                    ctx.arc(0, 0, diskRadius, 0, Math.PI * 2);
+                    ctx.fillStyle = diskGradient;
+                    ctx.fill();
+                }
+
+                // Event horizon glow
+                const glowGradient = ctx.createRadialGradient(0, 0, this.radius * 0.8, 0, 0, this.radius * 1.2);
+                glowGradient.addColorStop(0, 'rgba(255, 100, 50, 0.3)');
+                glowGradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 1.2, 0, Math.PI * 2);
+                ctx.fillStyle = glowGradient;
+                ctx.fill();
+
+                // Photon sphere
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 0.95, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255, 150, 50, ${0.5 + Math.sin(time * 0.1) * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Event horizon (black center)
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 0.85, 0, Math.PI * 2);
+                ctx.fillStyle = '#000000';
+                ctx.fill();
+
+                // Inner singularity glow
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 0.3, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(100, 0, 150, 0.3)';
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        // Asteroid class
+        class Asteroid {
+            constructor(orbitRadius) {
+                this.orbitRadius = orbitRadius || (1.8 + Math.random() * 0.5);
+                this.angle = Math.random() * Math.PI * 2;
+                this.orbitSpeed = (Math.random() * 0.002 + 0.001) * (Math.random() > 0.5 ? 1 : -1);
+                this.size = Math.random() * 3 + 1;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotationSpeed = (Math.random() - 0.5) * 0.1;
+                this.irregularity = [];
+                
+                // Create irregular asteroid shape
+                const points = Math.floor(Math.random() * 4) + 5;
+                for (let i = 0; i < points; i++) {
+                    this.irregularity.push(0.7 + Math.random() * 0.6);
+                }
+            }
+
+            update(time) {
+                this.angle += this.orbitSpeed;
+                this.rotation += this.rotationSpeed;
+            }
+
+            draw(time) {
+                const x = planetSettings.centerX + Math.cos(this.angle) * this.orbitRadius * planetSettings.radius * planetSettings.zoom;
+                const y = planetSettings.centerY + Math.sin(this.angle) * this.orbitRadius * planetSettings.radius * planetSettings.zoom;
+
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(this.rotation);
+
+                // Draw irregular asteroid
+                ctx.beginPath();
+                for (let i = 0; i < this.irregularity.length; i++) {
+                    const angle = (i / this.irregularity.length) * Math.PI * 2;
+                    const r = this.size * this.irregularity[i] * planetSettings.zoom;
+                    const px = Math.cos(angle) * r;
+                    const py = Math.sin(angle) * r;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+
+                const gradient = ctx.createRadialGradient(-this.size * 0.3, -this.size * 0.3, 0, 0, 0, this.size * 2);
+                gradient.addColorStop(0, '#8b7355');
+                gradient.addColorStop(1, '#4a3c2a');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.strokeStyle = '#2a2015';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        // Dust Particle class
+        class DustParticle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.3 + 0.1;
+                this.twinkleSpeed = Math.random() * 0.02 + 0.01;
+                this.twinklePhase = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                this.twinklePhase += this.twinkleSpeed;
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+
+            draw() {
+                const twinkle = Math.sin(this.twinklePhase) * 0.5 + 0.5;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(200, 180, 150, ${this.opacity * twinkle})`;
+                ctx.fill();
+            }
+        }
+
+        // Lightning Bolt class
+        class LightningBolt {
+            constructor(startX, startY) {
+                this.points = [{x: startX, y: startY}];
+                this.life = 1;
+                this.decay = 0.05;
+                this.generateBolt();
+            }
+
+            generateBolt() {
+                let current = this.points[0];
+                const targetY = current.y + Math.random() * 100 + 50;
+                
+                while (current.y < targetY) {
+                    const newX = current.x + (Math.random() - 0.5) * 40;
+                    const newY = current.y + Math.random() * 20 + 10;
+                    this.points.push({x: newX, y: newY});
+                    current = {x: newX, y: newY};
+                }
+            }
+
+            update() {
+                this.life -= this.decay;
+            }
+
+            draw() {
+                if (this.life <= 0) return;
+
+                ctx.beginPath();
+                ctx.moveTo(this.points[0].x, this.points[0].y);
+                
+                for (let i = 1; i < this.points.length; i++) {
+                    ctx.lineTo(this.points[i].x, this.points[i].y);
+                }
+
+                // Glow effect
+                ctx.strokeStyle = `rgba(150, 200, 255, ${this.life * 0.5})`;
+                ctx.lineWidth = 8;
+                ctx.stroke();
+
+                ctx.strokeStyle = `rgba(200, 230, 255, ${this.life})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Bright core
+                ctx.strokeStyle = `rgba(255, 255, 255, ${this.life})`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        // Second Planet class
+        class SecondPlanet {
+            constructor() {
+                this.orbitRadius = Math.max(canvas.width, canvas.height) * 0.8;
+                this.angle = Math.random() * Math.PI * 2;
+                this.orbitSpeed = 0.0003;
+                this.radius = Math.min(canvas.width, canvas.height) * 0.06;
+                this.rotation = 0;
+                this.rotationSpeed = 0.003;
+                
+                // Gas giant colors
+                this.colors = ['#c4a35a', '#a67c52', '#8b6914', '#d4a574'];
+                this.stripeOffsets = [];
+                for (let i = 0; i < 5; i++) {
+                    this.stripeOffsets.push(Math.random() * 100);
+                }
+            }
+
+            update(time) {
+                this.angle += this.orbitSpeed;
+                this.rotation += this.rotationSpeed;
+            }
+
+            draw(time) {
+                const x = planetSettings.centerX + Math.cos(this.angle) * this.orbitRadius;
+                const y = planetSettings.centerY + Math.sin(this.angle) * this.orbitRadius;
+
+                ctx.save();
+                ctx.translate(x, y);
+
+                // Atmosphere glow
+                const atmoGradient = ctx.createRadialGradient(0, 0, this.radius * 0.8, 0, 0, this.radius * 1.3);
+                atmoGradient.addColorStop(0, 'rgba(200, 180, 150, 0)');
+                atmoGradient.addColorStop(1, 'rgba(200, 180, 150, 0.2)');
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 1.3, 0, Math.PI * 2);
+                ctx.fillStyle = atmoGradient;
+                ctx.fill();
+
+                // Planet body with stripes (gas giant style)
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                
+                const gradient = ctx.createRadialGradient(-this.radius * 0.3, -this.radius * 0.3, 0, 0, 0, this.radius);
+                gradient.addColorStop(0, '#e8d5b7');
+                gradient.addColorStop(0.5, '#c4a35a');
+                gradient.addColorStop(1, '#8b6914');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+
+                // Add horizontal stripes
+                ctx.save();
+                ctx.clip();
+
+                for (let i = 0; i < 5; i++) {
+                    const yPos = -this.radius + (this.radius * 2 / 5) * i + Math.sin(time * 0.001 + this.stripeOffsets[i]) * 3;
+                    ctx.beginPath();
+                    ctx.moveTo(-this.radius, yPos);
+                    ctx.lineTo(this.radius, yPos);
+                    ctx.strokeStyle = this.colors[i % this.colors.length] + '80';
+                    ctx.lineWidth = this.radius * 0.15;
+                    ctx.stroke();
+                }
+
+                ctx.restore();
+
+                // Storm spot
+                ctx.beginPath();
+                ctx.arc(this.radius * 0.3, -this.radius * 0.2, this.radius * 0.15, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(200, 100, 50, 0.6)';
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        let blackHole;
+        let secondPlanet;
 
         // Comet Trail class
         class CometTrail {
@@ -703,10 +1170,14 @@
             cometTrailsArray = [];
             explosionParticles = [];
             nebulaClouds = [];
+            dustParticles = [];
+            asteroidBeltArray = [];
 
             const isMobile = window.innerWidth < 768;
-            let numberOfPlanetParticles = isMobile ? 1500 : 4000;
-            let numberOfRingParticles = isMobile ? 1200 : 3000;
+            const densityMultiplier = settings.density / 100;
+            
+            let numberOfPlanetParticles = Math.floor((isMobile ? 1500 : 4000) * densityMultiplier);
+            let numberOfRingParticles = Math.floor((isMobile ? 1200 : 3000) * densityMultiplier);
 
             const goldenRatio = (1 + Math.sqrt(5)) / 2;
 
@@ -763,9 +1234,32 @@
                 shootingStarsArray.push(star);
             }
 
+            // Generate Dust Particles
+            const numberOfDust = isMobile ? 100 : 200;
+            for (let i = 0; i < numberOfDust; i++) {
+                dustParticles.push(new DustParticle());
+            }
+
+            // Generate Black Hole
+            blackHole = new BlackHole();
+
+            // Generate Asteroids
+            initAsteroids();
+
+            // Generate Second Planet
+            secondPlanet = new SecondPlanet();
+
             // Generate Space Stations
             particlesArray.push(new SpaceStation(2.6, 0.015, 0.4, 0.2));
             particlesArray.push(new SpaceStation(3.2, 0.01, -0.3, 0.5));
+        }
+
+        function initAsteroids() {
+            asteroidBeltArray = [];
+            const numberOfAsteroids = settings.asteroids ? 80 : 0;
+            for (let i = 0; i < numberOfAsteroids; i++) {
+                asteroidBeltArray.push(new Asteroid());
+            }
         }
 
         // Draw atmospheric glow around planet
@@ -928,6 +1422,7 @@
 
         let time = 0;
         let shootingStarTimer = 0;
+        let lightningTimer = 0;
 
         function animate() {
             requestAnimationFrame(animate);
@@ -956,6 +1451,24 @@
                 starsArray[i].update();
             }
 
+            // Render dust particles
+            for (let i = 0; i < dustParticles.length; i++) {
+                dustParticles[i].update();
+                dustParticles[i].draw();
+            }
+
+            // Draw Black Hole (if enabled)
+            if (settings.blackHole && blackHole) {
+                blackHole.update(time);
+                blackHole.draw(time);
+            }
+
+            // Draw Second Planet (if enabled)
+            if (settings.secondPlanet && secondPlanet) {
+                secondPlanet.update(time);
+                secondPlanet.draw(time);
+            }
+
             // Update and render shooting stars
             shootingStarTimer++;
             if (shootingStarTimer > 300 && shootingStarsArray.some(s => !s.active)) {
@@ -976,11 +1489,41 @@
             // Draw atmosphere glow
             drawAtmosphereGlow(time);
 
+            // Draw Asteroids (if enabled)
+            if (settings.asteroids) {
+                for (let i = 0; i < asteroidBeltArray.length; i++) {
+                    asteroidBeltArray[i].update(time);
+                    asteroidBeltArray[i].draw(time);
+                }
+            }
+
             // Sort and render particles
             particlesArray.sort((a, b) => a.z3d - b.z3d);
 
             for (let i = 0; i < particlesArray.length; i++) {
                 particlesArray[i].update(time);
+            }
+
+            // Lightning on dark side of planet (if enabled)
+            if (settings.lightning) {
+                lightningTimer++;
+                if (lightningTimer > 120 && Math.random() < 0.02) {
+                    // Calculate dark side position
+                    const darkSideAngle = Math.PI; // Back side of planet
+                    const lightningX = planetSettings.centerX + Math.cos(darkSideAngle + planetSettings.manualRotationY) * planetSettings.radius * planetSettings.zoom * 0.8;
+                    const lightningY = planetSettings.centerY + Math.sin(darkSideAngle + planetSettings.manualRotationY) * planetSettings.radius * planetSettings.zoom * 0.8;
+                    lightningBolts.push(new LightningBolt(lightningX, lightningY));
+                    lightningTimer = 0;
+                }
+
+                // Update and render lightning
+                for (let i = lightningBolts.length - 1; i >= 0; i--) {
+                    lightningBolts[i].update();
+                    lightningBolts[i].draw();
+                    if (lightningBolts[i].life <= 0) {
+                        lightningBolts.splice(i, 1);
+                    }
+                }
             }
 
             // Render comet trails
@@ -1010,6 +1553,11 @@
             planetSettings.centerX = canvas.width / 2;
             planetSettings.centerY = canvas.height / 2;
             planetSettings.radius = Math.min(canvas.width, canvas.height) * 0.25;
+            if (blackHole) {
+                blackHole.x = canvas.width * 0.9;
+                blackHole.y = canvas.height * 0.15;
+                blackHole.radius = Math.min(canvas.width, canvas.height) * 0.08;
+            }
             init();
         });
 
