@@ -1,2 +1,26 @@
-Last updated: 2026-09-03 00:15:09 WIB
-Last updated: 2026-09-03 00:30:00 WIB
+# PlanetParticleAnimation
+
+
+
+## 📋 Overview
+
+This repository contains **8 files** and is built with the following technologies:
+
+HTML
+
+## 🚀 Quick Start
+
+## ✨ Features
+
+- 📝 Auto-generated documentation
+
+## 🛠️ Technologies
+
+HTML
+
+## 📄 License
+
+MIT License
+
+---
+*Last updated: 2026-09-03 00:59:41 WIB*
